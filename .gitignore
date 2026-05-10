@@ -1,0 +1,5 @@
+config.json
+.flask_secret
+web/node_modules
+web/dist
+web/.env.local
