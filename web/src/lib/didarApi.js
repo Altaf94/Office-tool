@@ -89,6 +89,41 @@ export async function didarFetch(url, options = {}) {
   return r
 }
 
+export async function fetchFormIdByCNIC(cnic) {
+  const base = getApiBase()
+  const q = new URLSearchParams({ FamilyMemberCNIC: cnic.trim() })
+  const r = await didarFetch(`${base}/queryforms/?${q}`, { method: 'GET' })
+  const data = await r.json().catch(() => null)
+  if (!r.ok) {
+    const errObj = data && typeof data === 'object' ? data : {}
+    throw new Error(formatHttpError(r, errObj))
+  }
+  if (!data) throw new Error('No data returned from queryforms API')
+  // Extract FormID from the response - it's nested in Forms array
+  if (!data.Forms || !Array.isArray(data.Forms) || data.Forms.length === 0) {
+    throw new Error('No forms found for this CNIC')
+  }
+  const formId = data.Forms[0].FormId
+  if (!formId) throw new Error('FormID not found in the response')
+  return String(formId)
+}
+
+export async function fetchHouseholdInfo(familyId) {
+  const base = getApiBase()
+  const q = new URLSearchParams({ FamilyId: familyId.trim() })
+  const r = await didarFetch(`${base}/queryforms/?${q}`, { method: 'GET' })
+  const data = await r.json().catch(() => null)
+  if (!r.ok) {
+    const errObj = data && typeof data === 'object' ? data : {}
+    throw new Error(formatHttpError(r, errObj))
+  }
+  if (!data) throw new Error('No data returned from queryforms API')
+  if (!data.Forms || !Array.isArray(data.Forms) || data.Forms.length === 0) {
+    return null
+  }
+  return data.Forms[0]
+}
+
 export async function fetchRegistrations(familyId) {
   const base = getApiBase()
   const q = new URLSearchParams({ FamilyId: familyId.trim() })

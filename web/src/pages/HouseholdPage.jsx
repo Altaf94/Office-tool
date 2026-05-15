@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import {
   clearTokens,
   fetchRegistrations,
+  fetchFormIdByCNIC,
+  fetchHouseholdInfo,
   approveMember,
 } from '../lib/didarApi'
 
@@ -12,6 +14,7 @@ export default function HouseholdPage() {
   const [message, setMessage] = useState('')
   const [messageIsError, setMessageIsError] = useState(false)
   const [rows, setRows] = useState(null)
+  const [householdInfo, setHouseholdInfo] = useState(null)
   const [loading, setLoading] = useState(false)
   const [approvingKey, setApprovingKey] = useState(null)
 
@@ -25,16 +28,30 @@ export default function HouseholdPage() {
   }
 
   const handleSearch = useCallback(async () => {
-    const fam = familyId.trim()
-    if (!fam) {
-      setErr('Enter household ID.')
+    const input = familyId.trim()
+    if (!input) {
+      setErr('Enter household ID or CNIC.')
       return
     }
     setLoading(true)
     setRows(null)
+    setHouseholdInfo(null)
     setOk('Loading…')
     try {
-      const list = await fetchRegistrations(fam)
+      let formId = input
+      // Check if input is CNIC (numeric only, typically 13 digits)
+      const isCNIC = /^\d+$/.test(input)
+      if (isCNIC) {
+        setOk('Fetching FormID from CNIC…')
+        formId = await fetchFormIdByCNIC(input)
+        setOk(`Found FormID: ${formId}. Loading data…`)
+      }
+      // Fetch both household info and registrations
+      const [householdData, list] = await Promise.all([
+        fetchHouseholdInfo(formId),
+        fetchRegistrations(formId)
+      ])
+      setHouseholdInfo(householdData)
       setRows(list)
       if (!list.length) setOk('No registrations for this household.')
       else setOk(`${list.length} registration(s).`)
@@ -91,11 +108,11 @@ export default function HouseholdPage() {
       </p>
       <h1>Didar household utility</h1>
 
-      <label htmlFor="family_id">Household ID (Form ID)</label>
+      <label htmlFor="family_id">Household ID (Form ID) or CNIC</label>
       <input
         id="family_id"
         type="text"
-        placeholder="e.g. JK001-39366661"
+        placeholder="e.g. HU9999-25202570 or 4210161098009"
         autoComplete="off"
         value={familyId}
         onChange={(e) => setFamilyId(e.target.value)}
@@ -110,47 +127,80 @@ export default function HouseholdPage() {
 
       {message ? <div className={messageIsError ? 'err' : 'ok'}>{message}</div> : null}
 
+      {householdInfo ? (
+        <>
+          <h2>Household Info</h2>
+          <table className="tbl" style={{ marginBottom: '2rem' }}>
+            <tbody>
+              <tr>
+                <td style={{ fontWeight: 'bold' }}>Form ID</td>
+                <td>{householdInfo.FormId || ''}</td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 'bold' }}>Jamat Khana</td>
+                <td>{householdInfo.JamatKhanaId || ''}</td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 'bold' }}>Household CNIC</td>
+                <td>{householdInfo.HouseHoldCNIC || ''}</td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 'bold' }}>Form Status</td>
+                <td>{householdInfo.FormStatus ?? ''}</td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 'bold' }}>Created</td>
+                <td>{householdInfo.CreatedAt || ''}</td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 'bold' }}>Updated</td>
+                <td>{householdInfo.UpdatedAt || ''}</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      ) : null}
+
       {rows && rows.length > 0 ? (
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Registration Id</th>
-              <th>Family member Id</th>
-              <th>Family member</th>
-              <th>CNIC</th>
-              <th>Decision status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const id = row.Id ?? row.id
-              const memId = row.FamilyMemberId ?? row.familyMemberId ?? ''
-              const stat = row.ApprovalStatus || row.approval_status || ''
-              const famRow = row.FamilyId || row.familyId || ''
-              const approved = String(stat).toLowerCase() === 'approved'
-              const busy = approvingKey === String(memId)
-              return (
-                <tr key={`${id}-${memId}`}>
-                  <td>{id}</td>
-                  <td>{memId}</td>
-                  <td>{row.FullName || ''}</td>
-                  <td>{row.CNIC || ''}</td>
-                  <td>{stat}</td>
-                  <td className="row-actions">
-                    <button
-                      type="button"
-                      disabled={approved || busy}
-                      onClick={() => void handleApprove(famRow, memId)}
-                    >
-                      {busy ? '…' : 'Approve'}
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <>
+          <h2>Family Members</h2>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>CNIC</th>
+                <th>Intent</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const id = row.Id ?? row.id
+                const memId = row.FamilyMemberId ?? row.familyMemberId ?? ''
+                const stat = row.ApprovalStatus || row.approval_status || ''
+                const famRow = row.FamilyId || row.familyId || ''
+                const approved = String(stat).toLowerCase() === 'approved'
+                const busy = approvingKey === String(memId)
+                return (
+                  <tr key={`${id}-${memId}`}>
+                    <td>{row.FullName || ''}</td>
+                    <td>{row.CNIC || ''}</td>
+                    <td>{stat}</td>
+                    <td className="row-actions">
+                      <button
+                        type="button"
+                        disabled={approved || busy}
+                        onClick={() => void handleApprove(famRow, memId)}
+                      >
+                        {busy ? '…' : 'Approve'}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </>
       ) : null}
     </div>
   )
