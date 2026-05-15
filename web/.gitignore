@@ -21,9 +21,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Python/Flask
-config.json
-.flask_secret
-web/node_modules
-web/.env.local
