@@ -1,11 +1,11 @@
-"""Minimal static-file server for Heroku (serves the Vite build from web/dist)."""
+"""Minimal static-file server for Heroku (serves the Vite build from dist)."""
 
 import http.server
 import os
 from pathlib import Path
 
 PORT = int(os.environ.get("PORT", 8000))
-DIST = str(Path(__file__).resolve().parent / "web" / "dist")
+DIST = str(Path(__file__).resolve().parent / "dist")
 
 
 class SPAHandler(http.server.SimpleHTTPRequestHandler):
