@@ -14,6 +14,7 @@ export default function HouseholdPage() {
   const [message, setMessage] = useState('')
   const [messageIsError, setMessageIsError] = useState(false)
   const [rows, setRows] = useState(null)
+  const [registrations, setRegistrations] = useState([])
   const [householdInfo, setHouseholdInfo] = useState(null)
   const [loading, setLoading] = useState(false)
   const [approvingKey, setApprovingKey] = useState(null)
@@ -35,6 +36,7 @@ export default function HouseholdPage() {
     }
     setLoading(true)
     setRows(null)
+    setRegistrations([])
     setHouseholdInfo(null)
     setOk('Loading…')
     try {
@@ -46,15 +48,21 @@ export default function HouseholdPage() {
         formId = await fetchFormIdByCNIC(input)
         setOk(`Found FormID: ${formId}. Loading data…`)
       }
-      // Fetch both household info and registrations
-      const [householdData, list] = await Promise.all([
-        fetchHouseholdInfo(formId),
-        fetchRegistrations(formId)
-      ])
+      // Fetch household info which includes family members
+      const householdData = await fetchHouseholdInfo(formId)
       setHouseholdInfo(householdData)
-      setRows(list)
-      if (!list.length) setOk('No registrations for this household.')
-      else setOk(`${list.length} registration(s).`)
+      
+      // Extract family members from household data
+      const familyMembers = householdData?.FamilyMembers || []
+      setRows(familyMembers)
+      
+      // Fetch registrations to get approval status
+      setOk('Loading registration status…')
+      const regs = await fetchRegistrations(formId)
+      setRegistrations(regs)
+      
+      if (!familyMembers.length) setOk('No family members found for this household.')
+      else setOk(`Found ${familyMembers.length} family member(s).`)
     } catch (e) {
       if (e instanceof Error && e.message === 'SESSION_EXPIRED') {
         navigate('/login', { replace: true })
@@ -168,7 +176,7 @@ export default function HouseholdPage() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>CNIC</th>
+                <th>ID Number</th>
                 <th>Intent</th>
                 <th></th>
               </tr>
@@ -176,24 +184,30 @@ export default function HouseholdPage() {
             <tbody>
               {rows.map((row) => {
                 const id = row.Id ?? row.id
-                const memId = row.FamilyMemberId ?? row.familyMemberId ?? ''
-                const stat = row.ApprovalStatus || row.approval_status || ''
-                const famRow = row.FamilyId || row.familyId || ''
-                const approved = String(stat).toLowerCase() === 'approved'
-                const busy = approvingKey === String(memId)
+                const idNumber = row.IdNumber || row.CNIC || ''
+                const fullName = row.FullName || ''
+                // Find registration status from event-registrations API
+                const reg = registrations.find((r) => String(r.FamilyMemberId ?? r.familyMemberId) === String(id))
+                const hasRegistration = Boolean(reg)
+                const status = hasRegistration ? (reg?.ApprovalStatus || reg?.approval_status || 'Pending') : '-'
+                const approved = status.toLowerCase() === 'approved'
+                const busy = approvingKey === String(id)
+                
                 return (
-                  <tr key={`${id}-${memId}`}>
-                    <td>{row.FullName || ''}</td>
-                    <td>{row.CNIC || ''}</td>
-                    <td>{stat}</td>
+                  <tr key={id}>
+                    <td>{fullName}</td>
+                    <td>{idNumber}</td>
+                    <td>{status}</td>
                     <td className="row-actions">
-                      <button
-                        type="button"
-                        disabled={approved || busy}
-                        onClick={() => void handleApprove(famRow, memId)}
-                      >
-                        {busy ? '…' : 'Approve'}
-                      </button>
+                      {hasRegistration && !approved && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void handleApprove(householdInfo?.FormId, id)}
+                        >
+                          {busy ? '…' : 'Approve'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

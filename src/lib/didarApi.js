@@ -110,18 +110,15 @@ export async function fetchFormIdByCNIC(cnic) {
 
 export async function fetchHouseholdInfo(familyId) {
   const base = getApiBase()
-  const q = new URLSearchParams({ FamilyId: familyId.trim() })
-  const r = await didarFetch(`${base}/queryforms/?${q}`, { method: 'GET' })
+  // Use the forms/{FormId} endpoint directly
+  const r = await didarFetch(`${base}/forms/${familyId.trim()}`, { method: 'GET' })
   const data = await r.json().catch(() => null)
   if (!r.ok) {
     const errObj = data && typeof data === 'object' ? data : {}
     throw new Error(formatHttpError(r, errObj))
   }
-  if (!data) throw new Error('No data returned from queryforms API')
-  if (!data.Forms || !Array.isArray(data.Forms) || data.Forms.length === 0) {
-    return null
-  }
-  return data.Forms[0]
+  if (!data) throw new Error('No data returned from forms API')
+  return data
 }
 
 export async function fetchRegistrations(familyId) {

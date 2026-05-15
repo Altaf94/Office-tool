@@ -52,9 +52,17 @@ export default function HouseholdPage() {
         fetchRegistrations(formId)
       ])
       setHouseholdInfo(householdData)
-      setRows(list)
-      if (!list.length) setOk('No registrations for this household.')
-      else setOk(`${list.length} registration(s).`)
+      
+      // Use family members from household data if available, otherwise use registrations
+      const familyMembers = householdData?.FamilyMembers || []
+      setRows(familyMembers.length > 0 ? familyMembers : list)
+      
+      if (familyMembers.length === 0 && list.length === 0) {
+        setOk('No family members found for this household.')
+      } else {
+        const count = familyMembers.length || list.length
+        setOk(`${count} family member(s).`)
+      }
     } catch (e) {
       if (e instanceof Error && e.message === 'SESSION_EXPIRED') {
         navigate('/login', { replace: true })
@@ -161,7 +169,7 @@ export default function HouseholdPage() {
         </>
       ) : null}
 
-      {rows && rows.length > 0 ? (
+      {(householdInfo?.FamilyMembers?.length > 0 || (rows && rows.length > 0)) ? (
         <>
           <h2>Family Members</h2>
           <table className="tbl">
@@ -174,17 +182,58 @@ export default function HouseholdPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const id = row.Id ?? row.id
-                const memId = row.FamilyMemberId ?? row.familyMemberId ?? ''
-                const stat = row.ApprovalStatus || row.approval_status || ''
-                const famRow = row.FamilyId || row.familyId || ''
+              {/* Show family members from household info first */}
+              {householdInfo?.FamilyMembers?.map((member) => {
+                const id = member.Id ?? member.id
+                const cnic = member.IdNumber || ''
+                const formId = householdInfo.FormId || ''
+                // Try to find matching approval data from event-registrations
+                const approvalData = rows?.find(r => 
+                  (r.CNIC === cnic || r.IdNumber === cnic) && 
+                  (r.FamilyId === formId || r.FormId === formId)
+                )
+                const stat = approvalData?.ApprovalStatus || approvalData?.approval_status || ''
+                const memId = approvalData?.FamilyMemberId ?? approvalData?.familyMemberId ?? id
                 const approved = String(stat).toLowerCase() === 'approved'
                 const busy = approvingKey === String(memId)
+                const hasApprovalData = Boolean(approvalData)
+                
                 return (
-                  <tr key={`${id}-${memId}`}>
+                  <tr key={`household-${id}-${cnic}`}>
+                    <td>{member.FullName || ''}</td>
+                    <td>{cnic}</td>
+                    <td>{stat || '-'}</td>
+                    <td className="row-actions">
+                      {hasApprovalData ? (
+                        <button
+                          type="button"
+                          disabled={approved || busy}
+                          onClick={() => void handleApprove(formId, memId)}
+                        >
+                          {busy ? '…' : 'Approve'}
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                )
+              })}
+              {/* Show additional members from event-registrations that aren't in household info */}
+              {rows?.filter(row => {
+                const rowCnic = row.CNIC || row.IdNumber || ''
+                return !householdInfo?.FamilyMembers?.some(m => m.IdNumber === rowCnic)
+              }).map((row) => {
+                const id = row.Id ?? row.id
+                const memId = row.FamilyMemberId ?? row.familyMemberId ?? id
+                const stat = row.ApprovalStatus || row.approval_status || ''
+                const famRow = row.FamilyId || row.familyId || row.FormId || ''
+                const cnic = row.CNIC || row.IdNumber || ''
+                const approved = String(stat).toLowerCase() === 'approved'
+                const busy = approvingKey === String(memId)
+                
+                return (
+                  <tr key={`registration-${id}-${memId}`}>
                     <td>{row.FullName || ''}</td>
-                    <td>{row.CNIC || ''}</td>
+                    <td>{cnic}</td>
                     <td>{stat}</td>
                     <td className="row-actions">
                       <button
