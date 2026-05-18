@@ -178,6 +178,11 @@ export default function HouseholdPage() {
                 <th>Name</th>
                 <th>ID Number</th>
                 <th>Intent</th>
+                <th>Attachment 1</th>
+                <th>Attachment 2</th>
+                <th>Affiliation Type</th>
+                <th>Affiliation Name</th>
+                <th>Affiliation CNIC</th>
                 <th></th>
               </tr>
             </thead>
@@ -193,11 +198,31 @@ export default function HouseholdPage() {
                 const approved = status.toLowerCase() === 'approved'
                 const busy = approvingKey === String(id)
                 
+                // Extract additional fields from registration
+                const attachment1 = reg?.Attachment1Key || ''
+                const attachment2 = reg?.Attachment2Key || ''
+                const affiliationType = reg?.AffiliationType || '-'
+                const affiliationName = reg?.AffiliationName || '-'
+                const affiliationCNIC = reg?.AffiliationCNIC || '-'
+                
                 return (
                   <tr key={id}>
                     <td>{fullName}</td>
                     <td>{idNumber}</td>
                     <td>{status}</td>
+                    <td>
+                      {attachment1 ? (
+                        <a href={attachment1} target="_blank" rel="noopener noreferrer">View</a>
+                      ) : '-'}
+                    </td>
+                    <td>
+                      {attachment2 ? (
+                        <a href={attachment2} target="_blank" rel="noopener noreferrer">View</a>
+                      ) : '-'}
+                    </td>
+                    <td>{affiliationType}</td>
+                    <td>{affiliationName}</td>
+                    <td>{affiliationCNIC}</td>
                     <td className="row-actions">
                       {hasRegistration && !approved && (
                         <button
