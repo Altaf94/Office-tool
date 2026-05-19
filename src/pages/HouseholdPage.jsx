@@ -132,7 +132,11 @@ export default function HouseholdPage() {
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             <polyline points="9 12 11 14 15 10"/>
           </svg>
-          <span style={{ fontWeight: '700', fontSize: '1rem', letterSpacing: '0.01em' }}>Intent Verification Portal</span>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+            <span style={{ fontWeight: '700', fontSize: '1rem', letterSpacing: '0.01em' }}>Intent Verification Portal</span>
+            <span style={{ fontWeight: '600', fontSize: '0.85rem', letterSpacing: '0.01em', marginTop: '2px' }}>For local Council use only</span>
+          </div>
+
         </div>
         <button
           type="button"
