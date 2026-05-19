@@ -49,6 +49,18 @@ export default function HouseholdPage() {
   const [householdInfo, setHouseholdInfo] = useState(null)
   const [loading, setLoading] = useState(false)
   const [approvingKey, setApprovingKey] = useState(null)
+  const [viewerUrl, setViewerUrl] = useState(null) // string | null
+  const [imgFailed, setImgFailed] = useState(false)
+
+  function openAttachment(url) {
+    setImgFailed(false)
+    setViewerUrl(url)
+  }
+
+  function closeViewer() {
+    setViewerUrl(null)
+    setImgFailed(false)
+  }
 
   const setOk = (text) => { setMessage(text); setMessageIsError(false) }
   const setErr = (text) => { setMessage(text); setMessageIsError(true) }
@@ -327,26 +339,26 @@ export default function HouseholdPage() {
                         <td style={{ padding: '11px 12px' }}><StatusBadge status={status} /></td>
                         <td style={{ padding: '11px 12px' }}>
                           {attachment1 ? (
-                            <a href={attachment1} target="_blank" rel="noopener noreferrer" style={{
+                            <button type="button" onClick={() => void openAttachment(attachment1)} style={{
                               display: 'inline-flex', alignItems: 'center', gap: '4px',
                               background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
-                              borderRadius: '5px', padding: '3px 10px', fontSize: '12px', fontWeight: '600', textDecoration: 'none',
+                              borderRadius: '5px', padding: '3px 10px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
                             }}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                               View
-                            </a>
+                            </button>
                           ) : <span style={{ color: '#9ca3af' }}>—</span>}
                         </td>
                         <td style={{ padding: '11px 12px' }}>
                           {attachment2 ? (
-                            <a href={attachment2} target="_blank" rel="noopener noreferrer" style={{
+                            <button type="button" onClick={() => void openAttachment(attachment2)} style={{
                               display: 'inline-flex', alignItems: 'center', gap: '4px',
                               background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
-                              borderRadius: '5px', padding: '3px 10px', fontSize: '12px', fontWeight: '600', textDecoration: 'none',
+                              borderRadius: '5px', padding: '3px 10px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
                             }}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                               View
-                            </a>
+                            </button>
                           ) : <span style={{ color: '#9ca3af' }}>—</span>}
                         </td>
                         <td style={{ padding: '11px 12px', color: '#374151' }}>{affiliationType}</td>
@@ -383,6 +395,62 @@ export default function HouseholdPage() {
           </div>
         ) : null}
       </main>
+
+      {/* Attachment viewer modal */}
+      {viewerUrl && (
+        <div
+          onClick={closeViewer}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: '10px', boxShadow: '0 8px 40px rgba(0,0,0,0.35)',
+              maxWidth: '90vw', maxHeight: '90vh', width: '860px',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            }}
+          >
+            {/* Modal header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 16px', borderBottom: '1px solid #e5e7eb',
+            }}>
+              <span style={{ fontWeight: '700', fontSize: '14px', color: '#111' }}>Attachment Preview</span>
+              <button
+                type="button"
+                onClick={closeViewer}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#6b7280', fontSize: '20px', lineHeight: 1, padding: '0 4px',
+                }}
+                aria-label="Close"
+              >✕</button>
+            </div>
+
+            {/* Modal body — embed URL directly; img ignores Content-Disposition */}
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '200px', padding: '16px' }}>
+              {!imgFailed ? (
+                <img
+                  src={viewerUrl}
+                  alt="Attachment"
+                  onError={() => setImgFailed(true)}
+                  style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: '6px', objectFit: 'contain' }}
+                />
+              ) : (
+                <iframe
+                  src={viewerUrl}
+                  title="Attachment"
+                  style={{ width: '100%', height: '70vh', border: 'none', borderRadius: '6px' }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
