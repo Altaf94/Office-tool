@@ -121,7 +121,8 @@ export default function HouseholdPage() {
           Log out
         </button>
       </p>
-      <h1>Didar household utility</h1>
+      <h1>Intent Verification Portal</h1>
+      <p style={{ color: '#b45309', fontWeight: '600', marginTop: '-0.5rem' }}>Please verify all documents before approving</p>
 
       <label htmlFor="family_id">Household ID (Form ID) or CNIC</label>
       <input
@@ -160,8 +161,8 @@ export default function HouseholdPage() {
                 <td>{householdInfo.HouseHoldCNIC || ''}</td>
               </tr>
               <tr>
-                <td style={{ fontWeight: 'bold' }}>Form Status</td>
-                <td>{householdInfo.FormStatus ?? ''}</td>
+                <td style={{ fontWeight: 'bold' }}>Registration Form Status</td>
+                <td>{{1: 'Draft', 2: 'Submitted', 3: 'Approved', 4: 'Rejected'}[householdInfo.FormStatus] ?? householdInfo.FormStatus ?? ''}</td>
               </tr>
               <tr>
                 <td style={{ fontWeight: 'bold' }}>Created</td>
