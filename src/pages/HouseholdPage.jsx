@@ -41,8 +41,8 @@ export default function HouseholdPage() {
     setOk('Loading…')
     try {
       let formId = input
-      // Check if input is CNIC (numeric only, typically 13 digits)
-      const isCNIC = /^\d+$/.test(input)
+      // Check if input is CNIC: pure digits OR 13 digits with a letter suffix (e.g. 1520148082185INF03, ...SEN01)
+      const isCNIC = /^\d+$/.test(input) || /^\d{13}[A-Za-z]/.test(input)
       if (isCNIC) {
         setOk('Fetching FormID from CNIC…')
         formId = await fetchFormIdByCNIC(input)
@@ -54,15 +54,22 @@ export default function HouseholdPage() {
       
       // Extract family members from household data
       const familyMembers = householdData?.FamilyMembers || []
-      setRows(familyMembers)
+
+      // If searched by CNIC, only show the matching member
+      const displayedMembers = isCNIC
+        ? familyMembers.filter(
+            (m) => (m.IdNumber || m.CNIC || '').toLowerCase() === input.toLowerCase()
+          )
+        : familyMembers
+      setRows(displayedMembers)
       
       // Fetch registrations to get approval status
       setOk('Loading registration status…')
       const regs = await fetchRegistrations(formId)
       setRegistrations(regs)
       
-      if (!familyMembers.length) setOk('No family members found for this household.')
-      else setOk(`Found ${familyMembers.length} family member(s).`)
+      if (!displayedMembers.length) setOk('No family members found for this CNIC.')
+      else setOk(`Found ${displayedMembers.length} family member(s).`)
     } catch (e) {
       if (e instanceof Error && e.message === 'SESSION_EXPIRED') {
         navigate('/login', { replace: true })
