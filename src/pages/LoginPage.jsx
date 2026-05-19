@@ -63,6 +63,8 @@ export default function LoginPage() {
           </div>
           <h1 style={{ fontSize: '1.25rem', fontWeight: '700', margin: '0 0 4px', color: '#111' }}>Intent Verification Portal</h1>
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#666' }}>Sign in to your account to continue</p>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#666' }}>For local Council use only</p>
+
         </div>
 
         {error ? (
