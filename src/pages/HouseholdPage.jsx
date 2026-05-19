@@ -8,6 +8,37 @@ import {
   approveMember,
 } from '../lib/didarApi'
 
+const STATUS_MAP = { 1: 'Draft', 2: 'Submitted', 3: 'Approved', 4: 'Rejected' }
+
+function formatDate(str) {
+  if (!str) return '—'
+  const d = new Date(str)
+  if (isNaN(d)) return str
+  return d.toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function StatusBadge({ status }) {
+  const s = (status || '').toLowerCase()
+  const styles = {
+    approved:  { background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' },
+    submitted: { background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' },
+    draft:     { background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db' },
+    rejected:  { background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' },
+    pending:   { background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' },
+  }
+  const style = styles[s] || styles.draft
+  return (
+    <span style={{
+      ...style,
+      padding: '2px 10px',
+      borderRadius: '999px',
+      fontSize: '12px',
+      fontWeight: '600',
+      display: 'inline-block',
+    }}>{status || '—'}</span>
+  )
+}
+
 export default function HouseholdPage() {
   const navigate = useNavigate()
   const [familyId, setFamilyId] = useState('')
@@ -19,21 +50,12 @@ export default function HouseholdPage() {
   const [loading, setLoading] = useState(false)
   const [approvingKey, setApprovingKey] = useState(null)
 
-  const setOk = (text) => {
-    setMessage(text)
-    setMessageIsError(false)
-  }
-  const setErr = (text) => {
-    setMessage(text)
-    setMessageIsError(true)
-  }
+  const setOk = (text) => { setMessage(text); setMessageIsError(false) }
+  const setErr = (text) => { setMessage(text); setMessageIsError(true) }
 
   const handleSearch = useCallback(async () => {
     const input = familyId.trim()
-    if (!input) {
-      setErr('Enter household ID or CNIC.')
-      return
-    }
+    if (!input) { setErr('Enter household ID or CNIC.'); return }
     setLoading(true)
     setRows(null)
     setRegistrations([])
@@ -41,57 +63,36 @@ export default function HouseholdPage() {
     setOk('Loading…')
     try {
       let formId = input
-      // Check if input is CNIC: pure digits OR 13 digits with a letter suffix (e.g. 1520148082185INF03, ...SEN01)
       const isCNIC = /^\d+$/.test(input) || /^\d{13}[A-Za-z]/.test(input)
       if (isCNIC) {
         setOk('Fetching FormID from CNIC…')
         formId = await fetchFormIdByCNIC(input)
         setOk(`Found FormID: ${formId}. Loading data…`)
       }
-      // Fetch household info which includes family members
       const householdData = await fetchHouseholdInfo(formId)
       setHouseholdInfo(householdData)
-      
-      // Extract family members from household data
       const familyMembers = householdData?.FamilyMembers || []
-
-      // If searched by CNIC, only show the matching member
       const displayedMembers = isCNIC
-        ? familyMembers.filter(
-            (m) => (m.IdNumber || m.CNIC || '').toLowerCase() === input.toLowerCase()
-          )
+        ? familyMembers.filter((m) => (m.IdNumber || m.CNIC || '').toLowerCase() === input.toLowerCase())
         : familyMembers
       setRows(displayedMembers)
-      
-      // Fetch registrations to get approval status
       setOk('Loading registration status…')
       const regs = await fetchRegistrations(formId)
       setRegistrations(regs)
-      
       if (!displayedMembers.length) setOk('No family members found for this CNIC.')
       else setOk(`Found ${displayedMembers.length} family member(s).`)
     } catch (e) {
-      if (e instanceof Error && e.message === 'SESSION_EXPIRED') {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (e instanceof Error && e.message === 'SESSION_EXPIRED') { navigate('/login', { replace: true }); return }
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
     }
   }, [familyId, navigate])
 
-  function logout() {
-    clearTokens()
-    navigate('/login', { replace: true })
-  }
+  function logout() { clearTokens(); navigate('/login', { replace: true }) }
 
   async function handleApprove(famId, memberId) {
-    if (!famId || memberId == null || memberId === '') {
-      setErr('Missing FamilyId or FamilyMemberId for this row.')
-      return
-    }
-
+    if (!famId || memberId == null || memberId === '') { setErr('Missing FamilyId or FamilyMemberId for this row.'); return }
     const key = `${memberId}`
     setApprovingKey(key)
     setOk('Approving…')
@@ -100,155 +101,284 @@ export default function HouseholdPage() {
       setOk('Approved. Refreshing…')
       await handleSearch()
     } catch (e) {
-      if (e instanceof Error && e.message === 'SESSION_EXPIRED') {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (e instanceof Error && e.message === 'SESSION_EXPIRED') { navigate('/login', { replace: true }); return }
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
       setApprovingKey(null)
     }
   }
 
-  function onKeyDown(e) {
-    if (e.key === 'Enter') handleSearch()
-  }
+  function onKeyDown(e) { if (e.key === 'Enter') handleSearch() }
 
   return (
-    <div className="layout">
-      <p className="topbar">
-        <button type="button" className="linkish" onClick={logout}>
-          Log out
-        </button>
-      </p>
-      <h1>Intent Verification Portal</h1>
-      <p style={{ color: '#b45309', fontWeight: '600', marginTop: '-0.5rem' }}>Please verify all documents before approving</p>
+    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
-      <label htmlFor="family_id">Household ID (Form ID) or CNIC</label>
-      <input
-        id="family_id"
-        type="text"
-        placeholder="e.g. HU9999-25202570 or 4210161098009"
-        autoComplete="off"
-        value={familyId}
-        onChange={(e) => setFamilyId(e.target.value)}
-        onKeyDown={onKeyDown}
-      />
+      {/* Header */}
+      <header style={{
+        background: 'linear-gradient(135deg, #0d9668, #0a7)',
+        color: '#fff',
+        padding: '0 24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        height: '60px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <polyline points="9 12 11 14 15 10"/>
+          </svg>
+          <span style={{ fontWeight: '700', fontSize: '1rem', letterSpacing: '0.01em' }}>Intent Verification Portal</span>
+        </div>
+        <button
+          type="button"
+          onClick={logout}
+          style={{
+            background: 'rgba(255,255,255,0.15)',
+            border: '1px solid rgba(255,255,255,0.3)',
+            color: '#fff',
+            padding: '6px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: '600',
+          }}
+        >Log out</button>
+      </header>
 
-      <div className="actions">
-        <button type="button" className="btn-primary" onClick={() => void handleSearch()} disabled={loading}>
-          {loading ? 'Searching…' : 'Search'}
-        </button>
-      </div>
+      <main style={{ maxWidth: '1000px', margin: '0 auto', padding: '28px 20px' }}>
 
-      {message ? <div className={messageIsError ? 'err' : 'ok'}>{message}</div> : null}
+        {/* Warning banner */}
+        <div style={{
+          background: '#fffbeb',
+          border: '1px solid #fcd34d',
+          borderLeft: '4px solid #f59e0b',
+          borderRadius: '7px',
+          padding: '10px 16px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '13.5px',
+          color: '#92400e',
+          fontWeight: '600',
+        }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          Please verify all documents before approving
+        </div>
 
-      {householdInfo ? (
-        <>
-          <h2>Household Info</h2>
-          <table className="tbl" style={{ marginBottom: '2rem' }}>
-            <tbody>
-              <tr>
-                <td style={{ fontWeight: 'bold' }}>Form ID</td>
-                <td>{householdInfo.FormId || ''}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 'bold' }}>Jamat Khana</td>
-                <td>{householdInfo.JamatKhanaId || ''}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 'bold' }}>Household CNIC</td>
-                <td>{householdInfo.HouseHoldCNIC || ''}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 'bold' }}>Registration Form Status</td>
-                <td>{{1: 'Draft', 2: 'Submitted', 3: 'Approved', 4: 'Rejected'}[householdInfo.FormStatus] ?? householdInfo.FormStatus ?? ''}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 'bold' }}>Created</td>
-                <td>{householdInfo.CreatedAt || ''}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 'bold' }}>Updated</td>
-                <td>{householdInfo.UpdatedAt || ''}</td>
-              </tr>
-            </tbody>
-          </table>
-        </>
-      ) : null}
+        {/* Search card */}
+        <div style={{
+          background: '#fff',
+          borderRadius: '10px',
+          boxShadow: '0 1px 6px rgba(0,0,0,0.08)',
+          padding: '24px',
+          marginBottom: '24px',
+        }}>
+          <label htmlFor="family_id" style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+            Household ID (Form ID) or CNIC
+          </label>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <input
+              id="family_id"
+              type="text"
+              placeholder="e.g. HU9999-25202570 or 4210161098009"
+              autoComplete="off"
+              value={familyId}
+              onChange={(e) => setFamilyId(e.target.value)}
+              onKeyDown={onKeyDown}
+              style={{
+                flex: 1,
+                minWidth: '220px',
+                padding: '10px 14px',
+                fontSize: '14px',
+                border: '1px solid #d1d5db',
+                borderRadius: '7px',
+                outline: 'none',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => void handleSearch()}
+              disabled={loading}
+              style={{
+                padding: '10px 28px',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#fff',
+                background: loading ? '#6ee7b7' : '#0d9668',
+                border: 'none',
+                borderRadius: '7px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {loading ? 'Searching…' : 'Search'}
+            </button>
+          </div>
 
-      {rows && rows.length > 0 ? (
-        <>
-          <h2>Family Members</h2>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>ID Number</th>
-                <th>Intent</th>
-                <th>Attachment 1</th>
-                <th>Attachment 2</th>
-                <th>Affiliation Type</th>
-                <th>Affiliation Name</th>
-                <th>Affiliation CNIC</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const id = row.Id ?? row.id
-                const idNumber = row.IdNumber || row.CNIC || ''
-                const fullName = row.FullName || ''
-                // Find registration status from event-registrations API
-                const reg = registrations.find((r) => String(r.FamilyMemberId ?? r.familyMemberId) === String(id))
-                const hasRegistration = Boolean(reg)
-                const status = hasRegistration ? (reg?.ApprovalStatus || reg?.approval_status || 'Pending') : '-'
-                const approved = status.toLowerCase() === 'approved'
-                const busy = approvingKey === String(id)
-                
-                // Extract additional fields from registration
-                const attachment1 = reg?.Attachment1Key || ''
-                const attachment2 = reg?.Attachment2Key || ''
-                const affiliationType = reg?.AffiliationType || '-'
-                const affiliationName = reg?.AffiliationName || '-'
-                const affiliationCNIC = reg?.AffiliationCNIC || '-'
-                
-                return (
-                  <tr key={id}>
-                    <td>{fullName}</td>
-                    <td>{idNumber}</td>
-                    <td>{status}</td>
-                    <td>
-                      {attachment1 ? (
-                        <a href={attachment1} target="_blank" rel="noopener noreferrer">View</a>
-                      ) : '-'}
-                    </td>
-                    <td>
-                      {attachment2 ? (
-                        <a href={attachment2} target="_blank" rel="noopener noreferrer">View</a>
-                      ) : '-'}
-                    </td>
-                    <td>{affiliationType}</td>
-                    <td>{affiliationName}</td>
-                    <td>{affiliationCNIC}</td>
-                    <td className="row-actions">
-                      {hasRegistration && !approved && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void handleApprove(householdInfo?.FormId, id)}
-                        >
-                          {busy ? '…' : 'Approve'}
-                        </button>
-                      )}
-                    </td>
+          {message ? (
+            <div style={{
+              marginTop: '12px',
+              padding: '9px 14px',
+              borderRadius: '6px',
+              fontSize: '13.5px',
+              background: messageIsError ? '#fff5f5' : '#f0fdf4',
+              border: `1px solid ${messageIsError ? '#fca5a5' : '#86efac'}`,
+              color: messageIsError ? '#b91c1c' : '#166534',
+            }}>{message}</div>
+          ) : null}
+        </div>
+
+        {/* Household Info card */}
+        {householdInfo ? (
+          <div style={{
+            background: '#fff',
+            borderRadius: '10px',
+            boxShadow: '0 1px 6px rgba(0,0,0,0.08)',
+            padding: '24px',
+            marginBottom: '24px',
+          }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: '700', color: '#111', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0d9668" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+              Household Info
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
+              {[
+                { label: 'Form ID', value: householdInfo.FormId },
+                { label: 'Jamat Khana', value: householdInfo.JamatKhanaId },
+                { label: 'Household CNIC', value: householdInfo.HouseHoldCNIC },
+                { label: 'Registration Form Status', value: STATUS_MAP[householdInfo.FormStatus] ?? householdInfo.FormStatus, badge: true },
+                { label: 'Created', value: formatDate(householdInfo.CreatedAt) },
+                { label: 'Updated', value: formatDate(householdInfo.UpdatedAt) },
+              ].map(({ label, value, badge }) => (
+                <div key={label} style={{ background: '#f8fafc', borderRadius: '7px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '5px' }}>{label}</div>
+                  <div style={{ fontSize: '14px', fontWeight: '500', color: '#111' }}>
+                    {badge ? <StatusBadge status={value || '—'} /> : (value || '—')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Family Members card */}
+        {rows && rows.length > 0 ? (
+          <div style={{
+            background: '#fff',
+            borderRadius: '10px',
+            boxShadow: '0 1px 6px rgba(0,0,0,0.08)',
+            padding: '24px',
+          }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: '700', color: '#111', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0d9668" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+              </svg>
+              Family Members
+              <span style={{ marginLeft: '4px', background: '#d1fae5', color: '#065f46', borderRadius: '999px', fontSize: '11px', fontWeight: '700', padding: '1px 9px' }}>{rows.length}</span>
+            </h2>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                    {['Name', 'ID Number', 'Intent', 'Attachment 1', 'Attachment 2', 'Affiliation Type', 'Affiliation Name', 'Affiliation CNIC', ''].map((h) => (
+                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </>
-      ) : null}
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const id = row.Id ?? row.id
+                    const idNumber = row.IdNumber || row.CNIC || ''
+                    const fullName = row.FullName || ''
+                    const reg = registrations.find((r) => String(r.FamilyMemberId ?? r.familyMemberId) === String(id))
+                    const hasRegistration = Boolean(reg)
+                    const status = hasRegistration ? (reg?.ApprovalStatus || reg?.approval_status || 'Pending') : '-'
+                    const approved = status.toLowerCase() === 'approved'
+                    const busy = approvingKey === String(id)
+                    const attachment1 = reg?.Attachment1Key || ''
+                    const attachment2 = reg?.Attachment2Key || ''
+                    const affiliationType = reg?.AffiliationType || '—'
+                    const affiliationName = reg?.AffiliationName || '—'
+                    const affiliationCNIC = reg?.AffiliationCNIC || '—'
+
+                    return (
+                      <tr key={id} style={{ borderBottom: '1px solid #f1f5f9' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = ''}
+                      >
+                        <td style={{ padding: '11px 12px', fontWeight: '600', color: '#111' }}>{fullName}</td>
+                        <td style={{ padding: '11px 12px', fontFamily: 'monospace', fontSize: '13px', color: '#374151' }}>{idNumber}</td>
+                        <td style={{ padding: '11px 12px' }}><StatusBadge status={status} /></td>
+                        <td style={{ padding: '11px 12px' }}>
+                          {attachment1 ? (
+                            <a href={attachment1} target="_blank" rel="noopener noreferrer" style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
+                              borderRadius: '5px', padding: '3px 10px', fontSize: '12px', fontWeight: '600', textDecoration: 'none',
+                            }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                              View
+                            </a>
+                          ) : <span style={{ color: '#9ca3af' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '11px 12px' }}>
+                          {attachment2 ? (
+                            <a href={attachment2} target="_blank" rel="noopener noreferrer" style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
+                              borderRadius: '5px', padding: '3px 10px', fontSize: '12px', fontWeight: '600', textDecoration: 'none',
+                            }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                              View
+                            </a>
+                          ) : <span style={{ color: '#9ca3af' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '11px 12px', color: '#374151' }}>{affiliationType}</td>
+                        <td style={{ padding: '11px 12px', color: '#374151' }}>{affiliationName}</td>
+                        <td style={{ padding: '11px 12px', fontFamily: 'monospace', fontSize: '13px', color: '#374151' }}>{affiliationCNIC}</td>
+                        <td style={{ padding: '11px 12px' }}>
+                          {hasRegistration && !approved && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handleApprove(householdInfo?.FormId, id)}
+                              style={{
+                                background: busy ? '#6ee7b7' : '#0d9668',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '6px 16px',
+                                fontSize: '12px',
+                                fontWeight: '700',
+                                cursor: busy ? 'not-allowed' : 'pointer',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {busy ? '…' : 'Approve'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+      </main>
     </div>
   )
 }
